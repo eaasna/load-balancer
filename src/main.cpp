@@ -1,41 +1,40 @@
-#include <sstream>
-
-#include <seqan3/argument_parser/all.hpp>
-
-#include "fastq_conversion.hpp"
+#include "cart_queue.hpp"
+#include "debug_helper.hpp"
+#include "simulate_thread_result.hpp"
 
 int main(int argc, char ** argv)
 {
-    seqan3::argument_parser parser{"Fastq-to-Fasta-Converter", argc, argv};
+    ///////////////////////////////////////
+    // INPUT PARAMETERS
+    ///////////////////////////////////////
 
-    // Declarations for argument parser
-    std::filesystem::path fastq_file{};
-    std::filesystem::path output_file{};
-    bool verbose = false;
+    // Query result simulation parameters
+    size_t nr_reads{100};
+    size_t nr_bins{16};
+    size_t max_hits_per_read{4};
 
-    // Parser
-    parser.info.author = "SeqAn-Team"; // give parser some infos
-    parser.info.version = "1.0.0";
-    parser.add_positional_option(fastq_file, "Please provide a fastq file.",
-                                 seqan3::input_file_validator{{"fq","fastq"}}); // Takes a fastq file and validates it
-    //output path as option, otherwise output is printed
-    parser.add_option(output_file, 'o', "output", "The file for fasta output. Default: stdout");
-    parser.add_flag(verbose, 'v', "verbose", "Give more detailed information here."); // example for a flag
+    // Cart production parameters
+    size_t nr_carts = nr_bins;
+    size_t cart_capacity = 4;
 
-    try
+    //INPUT PARAMETERS
+
+    auto valik_thread_result = generate_thread_result<std::vector<valik::query_result>>(nr_reads,
+                                                                                        nr_bins,
+                                                                                        max_hits_per_read);
+    // valik thread results are (read, [bins])
+    print_thread_result(valik_thread_result);
+    // carts should be (bin, [reads])
+
+    cart_queue queue{cart_capacity};
+
+    for (auto & query_result : valik_thread_result)
     {
-         parser.parse();                                                  // trigger command line parsing
-    }
-    catch (seqan3::argument_parser_error const & ext)                     // catch user errors
-    {
-        std::cerr << "Parsing error. " << ext.what() << "\n"; // give error message
-        return -1;
+        for (auto & bin_id : query_result.get_hits())
+        {
+            queue.insert(bin_id, query_result.get_id());
+        }
     }
 
-    convert_fastq(fastq_file, output_file); // Call fastq to fasta converter
-
-    if (verbose) // if flag is set
-        std::cerr << "Conversion was a success. Congrats!\n";
-
-    return 0;
+    print_queue_carts(queue.carts_being_filled);
 }
