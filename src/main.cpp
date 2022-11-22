@@ -14,27 +14,29 @@ int main(int argc, char ** argv)
     size_t max_hits_per_read{4};
 
     // Cart production parameters
-    size_t nr_carts = nr_bins;
     size_t cart_capacity = 4;
+
+    // Cart consumption parameters
+    size_t nr_carts = 2;
 
     //INPUT PARAMETERS
 
     auto valik_thread_result = generate_thread_result<std::vector<valik::query_result>>(nr_reads,
                                                                                         nr_bins,
                                                                                         max_hits_per_read);
-    // valik thread results are (read, [bins])
-    print_thread_result(valik_thread_result);
-    // carts should be (bin, [reads])
-
     cart_queue queue{cart_capacity};
 
     for (auto & query_result : valik_thread_result)
     {
         for (auto & bin_id : query_result.get_hits())
         {
-            queue.insert(bin_id, query_result.get_id());
+            auto insert_future = std::async(std::launch::async, &cart_queue::insert, &queue, bin_id, query_result.get_id());
+            insert_future.get();
         }
     }
 
-    print_queue_carts(queue.carts_being_filled);
+    //!TODO: need to gather all cart futures
+    auto f1 = std::async(std::launch::async, &cart_queue::take_full_cart, &queue);
+    cart c1 = f1.get();
+
 }
