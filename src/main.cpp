@@ -1,8 +1,7 @@
 #include "cart_queue.hpp"
-#include "debug_helper.hpp"
 #include "simulate_thread_result.hpp"
 
-int main(int argc, char ** argv)
+int main(int /*argc*/, char const* const* /*argv*/)
 {
     ///////////////////////////////////////
     // INPUT PARAMETERS
@@ -14,7 +13,6 @@ int main(int argc, char ** argv)
     size_t max_hits_per_read{4};
 
     // Cart production parameters
-    size_t nr_carts = nr_bins;
     size_t cart_capacity = 4;
 
     //INPUT PARAMETERS
@@ -26,7 +24,7 @@ int main(int argc, char ** argv)
     print_thread_result(valik_thread_result);
     // carts should be (bin, [reads])
 
-    cart_queue queue{cart_capacity};
+    cart_queue queue{nr_bins, cart_capacity};
 
     for (auto & query_result : valik_thread_result)
     {

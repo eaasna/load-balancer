@@ -1,8 +1,9 @@
 #pragma once
 
-#include <random>
+#include <valik/search/query_result.hpp>
 
-#include "valik/search/query_result.hpp"
+#include <random>
+#include <set>
 
 // res_t == std::vector<valik::query_result>
 template <typename res_t>

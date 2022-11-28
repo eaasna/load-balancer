@@ -1,38 +1,55 @@
 #pragma once
 
-#include <unordered_map>
-
-#include <seqan3/core/debug_stream.hpp>
-
-#include "cart.hpp"
+#include <cassert>
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <vector>
 
 struct cart_queue {
-    size_t cart_max_capacity;
-    std::unordered_map<size_t, cart> carts_being_filled;
+    // same as cart, but with additional mutex
+    struct secured_cart {
+        std::mutex mutex;
+        std::vector<std::string> queries;
+    };
 
-    void insert(size_t bin_id, std::string const& query)
+    std::vector<secured_cart> carts_being_filled;
+    size_t cart_max_capacity;
+
+    cart_queue(size_t number_of_bins, size_t cart_max_capacity)
+        : carts_being_filled(number_of_bins)
+        , cart_max_capacity{cart_max_capacity}
     {
-        // Only adds a cart if it doesn't exists yet
-        auto [iter, succ] = carts_being_filled.try_emplace(bin_id, bin_id);
-        auto& c = iter->second;
-        if (c.get_occupancy() == cart_max_capacity) return; //!TODO this if shouldn't be here
-        c.add_query(query);
-        if (c.get_occupancy() == cart_max_capacity) {
+        for (auto& cart : carts_being_filled) {
+            cart.queries.reserve(cart_max_capacity);
+        }
+    }
+
+    void insert(size_t bin_id, std::string query)
+    {
+        assert(carts_being_filled.size() < bin_id && "bin_id has to be between 0 and number_of_bins");
+
+        auto& cart = carts_being_filled.at(bin_id);
+
+        assert(cart.queries.size() < cart_max_capacity && "carts should always have at least one empty value");
+        cart.queries.emplace_back(std::move(query));
+        if (cart.queries.size() == cart_max_capacity) {
             //!TODO do something more useful
         }
     }
 };
 
-void print_queue_carts(std::unordered_map<size_t, cart> cart_queue)
+void print_queue_carts(std::vector<cart_queue::secured_cart> const& cart_queue)
 {
-    seqan3::debug_stream << "\t\t\tCARTS\n";
-    seqan3::debug_stream << "Bin ID\tQueries\n";
-    for (auto & [bin_id, cart] : cart_queue)
-    {
-        seqan3::debug_stream << cart.get_bin() << '\t';
-        for (auto & query : cart.get_queries())
-            seqan3::debug_stream << query << '\t';
+    std::cout << "\t\t\tCARTS\n";
+    std::cout << "Bin ID\tQueries\n";
+    for (size_t bin_id{0}; bin_id < cart_queue.size(); ++bin_id) {
+        auto const& cart = cart_queue[bin_id];
+        std::cout << bin_id << '\t';
 
-        seqan3::debug_stream << '\n';
+        for (auto & query : cart.queries)
+            std::cout << query << '\t';
+
+        std::cout << '\n';
     }
 }
