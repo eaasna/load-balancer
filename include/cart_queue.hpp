@@ -18,15 +18,19 @@ struct cart_queue {
     std::vector<secured_cart> carts_being_filled;
     size_t cart_max_capacity;
 
+
     std::mutex filled_carts_mutex;
-    std::condition_variable filled_carts_cv;
+    std::condition_variable filled_carts_process_ready_cv;
+    std::condition_variable filled_carts_queue_ready_cv;
+
     std::vector<std::tuple<size_t, std::vector<std::string>>> filled_carts;
     size_t max_queued_carts;
     bool finishing{false};
 
-    cart_queue(size_t number_of_bins, size_t cart_max_capacity)
+    cart_queue(size_t number_of_bins, size_t cart_max_capacity, size_t max_queued_carts)
         : carts_being_filled(number_of_bins)
         , cart_max_capacity{cart_max_capacity}
+        , max_queued_carts{max_queued_carts}
     {
         for (auto& cart : carts_being_filled) {
             cart.queries.reserve(cart_max_capacity);
@@ -48,9 +52,14 @@ struct cart_queue {
         if (cart.queries.size() == cart_max_capacity) {
             // lock full cart queue
             auto _ = std::unique_lock{filled_carts_mutex};
+
+            // wait for enough space
+            while (filled_carts.size() == max_queued_carts) {
+                filled_carts_queue_ready_cv.wait(_);
+            }
             filled_carts.emplace_back(bin_id, std::move(cart.queries));
             cart.queries.reserve(cart_max_capacity);
-            filled_carts_cv.notify_one();
+            filled_carts_process_ready_cv.notify_one();
         }
     }
 
@@ -60,13 +69,14 @@ struct cart_queue {
 
         // if no cart is available, wait
         while (filled_carts.empty() and !finishing) {
-            filled_carts_cv.wait(g);
+            filled_carts_process_ready_cv.wait(g);
         }
         if (finishing and filled_carts.empty()) return std::nullopt;
 
         // move cart from queue and return it
         auto v = std::move(filled_carts.back());
         filled_carts.pop_back();
+        filled_carts_queue_ready_cv.notify_one();
         return {std::move(v)};
     }
 
@@ -78,12 +88,12 @@ struct cart_queue {
             auto g2 = std::unique_lock{filled_carts_mutex};
             filled_carts.emplace_back(bin_id, std::move(cart.queries));
             cart.queries.reserve(cart_max_capacity);
-            filled_carts_cv.notify_one();
+            filled_carts_process_ready_cv.notify_one();
         }
 
         auto g2 = std::unique_lock{filled_carts_mutex};
         finishing = true;
-        filled_carts_cv.notify_all();
+        filled_carts_process_ready_cv.notify_all();
     }
 };
 
