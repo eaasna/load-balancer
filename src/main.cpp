@@ -35,6 +35,6 @@ int main(int /*argc*/, char const* const* /*argv*/)
         }
     }
     print_queue_carts(queue.carts_being_filled);
-    queue.flush();
+    queue.finish();
     print_queue_carts(queue.carts_being_filled);
 }

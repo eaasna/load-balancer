@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,7 @@ struct cart_queue {
     std::condition_variable filled_carts_cv;
     std::vector<std::tuple<size_t, std::vector<std::string>>> filled_carts;
     size_t max_queued_carts;
+    bool finishing{false};
 
     cart_queue(size_t number_of_bins, size_t cart_max_capacity)
         : carts_being_filled(number_of_bins)
@@ -53,22 +55,23 @@ struct cart_queue {
     }
 
     // Take a cart from the filled_carts list - thread safe
-    auto dequeue() -> std::tuple<int ,std::vector<std::string>> {
+    auto dequeue() -> std::optional<std::tuple<int ,std::vector<std::string>>> {
         auto g = std::unique_lock{filled_carts_mutex};
 
         // if no cart is available, wait
-        while (filled_carts.empty()) {
+        while (filled_carts.empty() and !finishing) {
             filled_carts_cv.wait(g);
         }
+        if (finishing and filled_carts.empty()) return std::nullopt;
 
         // move cart from queue and return it
         auto v = std::move(filled_carts.back());
         filled_carts.pop_back();
-        return v;
+        return {std::move(v)};
     }
 
     // flushes all partially filled carts to the filled_carts list - thread safe
-    void flush() {
+    void finish() {
         for (size_t bin_id{0}; bin_id < carts_being_filled.size(); ++bin_id) {
             auto& cart = carts_being_filled[bin_id];
             auto g1 = std::unique_lock{cart.mutex};
@@ -77,6 +80,10 @@ struct cart_queue {
             cart.queries.reserve(cart_max_capacity);
             filled_carts_cv.notify_one();
         }
+
+        auto g2 = std::unique_lock{filled_carts_mutex};
+        finishing = true;
+        filled_carts_cv.notify_all();
     }
 };
 
