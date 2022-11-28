@@ -36,11 +36,15 @@ struct cart_queue {
         assert(carts_being_filled.size() < bin_id && "bin_id has to be between 0 and number_of_bins");
 
         auto& cart = carts_being_filled.at(bin_id);
-        auto _ = std::lock_guard{cart.mutex};
 
+        // locking the cart and inserting the query
+        auto _ = std::lock_guard{cart.mutex};
         assert(cart.queries.size() < cart_max_capacity && "carts should always have at least one empty value");
         cart.queries.emplace_back(std::move(query));
+
+        // check if cart is full
         if (cart.queries.size() == cart_max_capacity) {
+            // lock full cart queue
             auto _ = std::unique_lock{filled_carts_mutex};
             filled_carts.emplace_back(bin_id, std::move(cart.queries));
             cart.queries.reserve(cart_max_capacity);
@@ -50,9 +54,13 @@ struct cart_queue {
 
     auto dequeue() -> std::tuple<int ,std::vector<std::string>> {
         auto g = std::unique_lock{filled_carts_mutex};
-        if (filled_carts.empty()) {
+
+        // if no cart is available, wait
+        while (filled_carts.empty()) {
             filled_carts_cv.wait(g);
         }
+
+        // move cart from queue and return it
         auto v = std::move(filled_carts.back());
         filled_carts.pop_back();
         return v;
