@@ -26,6 +26,7 @@ int main(int /*argc*/, char const* const* /*argv*/)
 
     cart_queue queue{nr_bins, cart_capacity};
 
+
     for (auto & query_result : valik_thread_result)
     {
         for (auto & bin_id : query_result.get_hits())
@@ -33,6 +34,7 @@ int main(int /*argc*/, char const* const* /*argv*/)
             queue.insert(bin_id, query_result.get_id());
         }
     }
-
+    print_queue_carts(queue.carts_being_filled);
+    queue.flush();
     print_queue_carts(queue.carts_being_filled);
 }

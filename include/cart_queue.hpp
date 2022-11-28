@@ -31,11 +31,11 @@ struct cart_queue {
         }
     }
 
-    void insert(size_t bin_id, std::string query)
-    {
+    // Insert a query into a bin - thread safe
+    void insert(size_t bin_id, std::string query) {
         assert(carts_being_filled.size() < bin_id && "bin_id has to be between 0 and number_of_bins");
 
-        auto& cart = carts_being_filled.at(bin_id);
+        auto& cart = carts_being_filled[bin_id];
 
         // locking the cart and inserting the query
         auto _ = std::lock_guard{cart.mutex};
@@ -52,6 +52,7 @@ struct cart_queue {
         }
     }
 
+    // Take a cart from the filled_carts list - thread safe
     auto dequeue() -> std::tuple<int ,std::vector<std::string>> {
         auto g = std::unique_lock{filled_carts_mutex};
 
@@ -64,6 +65,18 @@ struct cart_queue {
         auto v = std::move(filled_carts.back());
         filled_carts.pop_back();
         return v;
+    }
+
+    // flushes all partially filled carts to the filled_carts list - thread safe
+    void flush() {
+        for (size_t bin_id{0}; bin_id < carts_being_filled.size(); ++bin_id) {
+            auto& cart = carts_being_filled[bin_id];
+            auto g1 = std::unique_lock{cart.mutex};
+            auto g2 = std::unique_lock{filled_carts_mutex};
+            filled_carts.emplace_back(bin_id, std::move(cart.queries));
+            cart.queries.reserve(cart_max_capacity);
+            filled_carts_cv.notify_one();
+        }
     }
 };
 
