@@ -2,6 +2,7 @@
 
 #include <valik/search/query_result.hpp>
 
+#include <iostream>
 #include <random>
 #include <set>
 
