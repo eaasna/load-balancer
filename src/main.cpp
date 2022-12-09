@@ -2,6 +2,7 @@
 
 #include <random>
 #include <thread>
+#include <iostream>
 
 int main(int /*argc*/, char const* const* /*argv*/)
 {
@@ -71,6 +72,4 @@ int main(int /*argc*/, char const* const* /*argv*/)
     consumers.clear(); // join all threads/waiting till they finish
     std::cout << "produced: " << countProduced << "\n";
     std::cout << "consumed: " << countConsumed << "\n";
-
-    print_queue_carts(queue.carts_being_filled);
 }
