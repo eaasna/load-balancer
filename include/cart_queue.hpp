@@ -16,8 +16,9 @@
  *
  * The cart queue is designed to be accessed by multiple consumers and producers concurrently.
  */
+template <typename value_t>
 struct cart_queue {
-    using cart = std::vector<std::string>;
+    using cart = std::vector<value_t>;
 
     // same as cart, but with additional mutex
     struct secured_cart {
@@ -51,7 +52,7 @@ struct cart_queue {
     }
 
     // Insert a query into a bin - thread safe
-    void insert(size_t bin_id, std::string query) {
+    void insert(size_t bin_id, value_t value) {
         assert(carts_being_filled.size() < bin_id && "bin_id has to be between 0 and number_of_bins");
 
         auto& cart = carts_being_filled[bin_id];
@@ -59,7 +60,7 @@ struct cart_queue {
         // locking the cart and inserting the query
         auto _ = std::lock_guard{cart.mutex};
         assert(cart.basket.size() < cart_max_capacity && "carts should always have at least one empty value");
-        cart.basket.emplace_back(std::move(query));
+        cart.basket.emplace_back(std::move(value));
 
         // check if cart is full
         if (cart.basket.size() == cart_max_capacity) {
@@ -110,7 +111,7 @@ struct cart_queue {
     }
 };
 
-void print_queue_carts(std::vector<cart_queue::secured_cart> const& cart_queue)
+void print_queue_carts(std::vector<cart_queue<std::string>::secured_cart> const& cart_queue)
 {
     std::cout << "\t\t\tCARTS\n";
     std::cout << "Bin ID\tQueries\n";
