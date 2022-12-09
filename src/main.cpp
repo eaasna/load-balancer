@@ -19,6 +19,10 @@ int main(int /*argc*/, char const* const* /*argv*/)
     size_t cart_capacity = 4;
     size_t max_carts_queued = 4;
 
+    // Threads
+    size_t producerThreadsCt = 4;
+    size_t consumerThreadsCt = 4;
+
     // Some statistics for debugging
     std::atomic_int countProduced{};
     std::atomic_int countConsumed{};
@@ -27,7 +31,7 @@ int main(int /*argc*/, char const* const* /*argv*/)
 
     auto producers = std::vector<std::jthread>{};
     // spawns a few worker threads that produce data
-    for (size_t i{0}; i < 4; ++i) {
+    for (size_t i{0}; i < producerThreadsCt; ++i) {
         producers.emplace_back([&]() {
             //!TODO actually running different valik searches here
             std::mt19937 gen{}; // seed generator
@@ -50,7 +54,7 @@ int main(int /*argc*/, char const* const* /*argv*/)
 
     auto consumers = std::vector<std::jthread>{};
     // spawns a few worker threads that consume the data
-    for (size_t i{0}; i < 4; ++i) {
+    for (size_t i{0}; i < consumerThreadsCt; ++i) {
         consumers.emplace_back([&]() {
             auto next = queue.dequeue();
             while (next) {
