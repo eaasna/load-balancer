@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <condition_variable>
-#include <iostream>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -110,18 +109,3 @@ struct cart_queue {
         filled_carts_process_ready_cv.notify_all();
     }
 };
-
-void print_queue_carts(std::vector<cart_queue<std::string>::secured_cart> const& cart_queue)
-{
-    std::cout << "\t\t\tCARTS\n";
-    std::cout << "Bin ID\tQueries\n";
-    for (size_t bin_id{0}; bin_id < cart_queue.size(); ++bin_id) {
-        auto const& cart = cart_queue[bin_id];
-        std::cout << bin_id << '\t';
-
-        for (auto & query : cart.basket)
-            std::cout << query << '\t';
-
-        std::cout << '\n';
-    }
-}
