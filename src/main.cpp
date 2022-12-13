@@ -27,25 +27,41 @@ int main(int /*argc*/, char const* const* /*argv*/)
     std::atomic_int countProduced{};
     std::atomic_int countConsumed{};
 
-    auto queue = cart_queue<std::string>{nr_bins, cart_capacity, max_carts_queued};
+    auto queue = cart_queue<std::tuple<std::string, std::string>>{nr_bins, cart_capacity, max_carts_queued};
 
     auto producers = std::vector<std::jthread>{};
     // spawns a few worker threads that produce data
     for (size_t i{0}; i < producerThreadsCt; ++i) {
-        producers.emplace_back([&]() {
+        producers.emplace_back([&]()
+        {
             //!TODO actually running different valik searches here
             std::mt19937 gen{}; // seed generator
             std::uniform_int_distribution<> bin_distr(0, nr_bins - 1); // define the range
             std::uniform_int_distribution<> per_read_distr(0, max_hits_per_read);
+            std::uniform_int_distribution<> dna4_distr(0, 4); // random values between 0-3 for A, C, G, T
 
             for(size_t read_id=0; read_id<nr_reads; read_id++)
             {
-                auto read_str = std::to_string(read_id);
+                auto read_id_as_str = std::to_string(read_id);
+
+                // Generate some random read of length.....50 !TODO
+                auto read_str = std::string(50, 'N'); // create string of length 50 filled with Ns
+                for (auto& c : read_str)
+                {
+                    switch(dna4_distr(gen))
+                    {
+                        case 0: c = 'A'; break;
+                        case 1: c = 'C'; break;
+                        case 2: c = 'G'; break;
+                        case 3: c = 'T'; break;
+                        default: assert(false && "This should never happen");
+                    }
+                }
                 for (int i = 0; i < per_read_distr(gen); i++)
                 {
                     auto bin_id = bin_distr(gen);
                     // This would probably be called in the local_prefilter callback
-                    queue.insert(bin_id, read_str);
+                    queue.insert(bin_id, {read_id_as_str, read_str});
                     ++countProduced;
                 }
             }
