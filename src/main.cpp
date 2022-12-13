@@ -27,7 +27,7 @@ int main(int /*argc*/, char const* const* /*argv*/)
     print_thread_result(valik_thread_result);
     // carts should be (bin, [reads])
 
-    cart_queue queue{nr_bins, cart_capacity, max_carts_queued};
+    auto queue = cart_queue<std::string>{nr_bins, cart_capacity, max_carts_queued};
 
     auto threads = std::vector<std::jthread>{};
 
