@@ -7,14 +7,28 @@
 #include <string>
 #include <vector>
 
+/** A cart queue groups values together and sends them to consumers in batches.
+ *
+ * The cart queue is organized in so called carts. There is a list of carts that currently are being filled.
+ * Each cart that is being filled, collects values for a unique bin. If a cart is full it is being pushed
+ * to to full cart queue. The full cart queue then can be processed by consumers.
+ *
+ * The cart queue is designed to be accessed by multiple consumers and producers concurrently.
+ */
+template <typename value_t>
 struct cart_queue {
+    using cart = std::vector<value_t>;
+
     // same as cart, but with additional mutex
     struct secured_cart {
         std::mutex mutex;
-        std::vector<std::string> queries;
+        cart       basket;
     };
 
+     //!< List of carts that are ready to be filled
     std::vector<secured_cart> carts_being_filled;
+
+    //!< Maximum number of elements that should be put into a cart before it is send of to be consumed
     size_t cart_max_capacity;
 
 
@@ -22,7 +36,7 @@ struct cart_queue {
     std::condition_variable filled_carts_process_ready_cv;
     std::condition_variable filled_carts_queue_ready_cv;
 
-    std::vector<std::tuple<size_t, std::vector<std::string>>> filled_carts;
+    std::vector<std::tuple<size_t, cart>> filled_carts;
     size_t max_queued_carts;
     bool finishing{false};
 
@@ -32,23 +46,23 @@ struct cart_queue {
         , max_queued_carts{max_queued_carts}
     {
         for (auto& cart : carts_being_filled) {
-            cart.queries.reserve(cart_max_capacity);
+            cart.basket.reserve(cart_max_capacity);
         }
     }
 
     // Insert a query into a bin - thread safe
-    void insert(size_t bin_id, std::string query) {
+    void insert(size_t bin_id, value_t value) {
         assert(carts_being_filled.size() < bin_id && "bin_id has to be between 0 and number_of_bins");
 
         auto& cart = carts_being_filled[bin_id];
 
         // locking the cart and inserting the query
         auto _ = std::lock_guard{cart.mutex};
-        assert(cart.queries.size() < cart_max_capacity && "carts should always have at least one empty value");
-        cart.queries.emplace_back(std::move(query));
+        assert(cart.basket.size() < cart_max_capacity && "carts should always have at least one empty value");
+        cart.basket.emplace_back(std::move(value));
 
         // check if cart is full
-        if (cart.queries.size() == cart_max_capacity) {
+        if (cart.basket.size() == cart_max_capacity) {
             // lock full cart queue
             auto _ = std::unique_lock{filled_carts_mutex};
 
@@ -56,14 +70,14 @@ struct cart_queue {
             while (filled_carts.size() == max_queued_carts) {
                 filled_carts_queue_ready_cv.wait(_);
             }
-            filled_carts.emplace_back(bin_id, std::move(cart.queries));
-            cart.queries.reserve(cart_max_capacity);
+            filled_carts.emplace_back(bin_id, std::move(cart.basket));
+            cart.basket.reserve(cart_max_capacity);
             filled_carts_process_ready_cv.notify_one();
         }
     }
 
     // Take a cart from the filled_carts list - thread safe
-    auto dequeue() -> std::optional<std::tuple<int ,std::vector<std::string>>> {
+    auto dequeue() -> std::optional<std::tuple<int ,cart>> {
         auto g = std::unique_lock{filled_carts_mutex};
 
         // if no cart is available, wait
@@ -85,8 +99,8 @@ struct cart_queue {
             auto& cart = carts_being_filled[bin_id];
             auto g1 = std::unique_lock{cart.mutex};
             auto g2 = std::unique_lock{filled_carts_mutex};
-            filled_carts.emplace_back(bin_id, std::move(cart.queries));
-            cart.queries.reserve(cart_max_capacity);
+            filled_carts.emplace_back(bin_id, std::move(cart.basket));
+            cart.basket.reserve(cart_max_capacity);
             filled_carts_process_ready_cv.notify_one();
         }
 

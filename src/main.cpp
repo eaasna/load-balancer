@@ -27,7 +27,7 @@ int main(int /*argc*/, char const* const* /*argv*/)
     std::atomic_int countProduced{};
     std::atomic_int countConsumed{};
 
-    cart_queue queue{nr_bins, cart_capacity, max_carts_queued};
+    auto queue = cart_queue<std::string>{nr_bins, cart_capacity, max_carts_queued};
 
     auto producers = std::vector<std::jthread>{};
     // spawns a few worker threads that produce data
