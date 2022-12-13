@@ -1,8 +1,65 @@
 #include "cart_queue.hpp"
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <random>
 #include <thread>
-#include <iostream>
+
+/** !\brief This class calls an external program and hands over the data as the first parameter
+ *
+ */
+class ExternalConsumer {
+    std::filesystem::path  tmpPath;
+    std::string            executableName;
+    inline static std::atomic_int consumerIdCt{};
+
+
+public:
+    ExternalConsumer()
+        : tmpPath{std::filesystem::temp_directory_path() / "loadbalancer"}
+        , executableName{[]() -> std::string {
+            if (auto ptr = std::getenv("LOADBALANCER_CONSUMER")) {
+                return ptr;
+            } else {
+                return "cat"; //!TODO, maybe something smarter?
+            }
+        }()}
+    {
+        //!TODO This could require some more error handling
+        std::filesystem::create_directories(tmpPath);
+    }
+    ExternalConsumer(ExternalConsumer const&) = delete;
+    ExternalConsumer(ExternalConsumer&&) = delete;
+
+    ~ExternalConsumer() {
+        std::filesystem::remove_all(tmpPath);
+    }
+
+
+    auto operator=(ExternalConsumer const&) -> ExternalConsumer& = delete;
+    auto operator=(ExternalConsumer&&) -> ExternalConsumer& = delete;
+
+    void processBasket(size_t bin_id, std::vector<std::tuple<std::string, std::string>> const& basket) {
+        static thread_local int consumerId = ++consumerIdCt;
+
+        auto pathName = tmpPath / ("file_" + std::to_string(consumerId) + ".fasta");
+
+        // Write to fasta file
+        auto ofs = std::ofstream{pathName};
+        for (auto const& [name, seq] : basket) {
+            ofs << '>' <<  name << '-' << bin_id << '\n';
+            ofs << seq << '\n';
+        }
+        ofs.close();
+
+        // Call consumer program
+        auto call = executableName + " " + pathName.string();
+        auto ret = std::system(call.c_str());
+        //!TODO missing interpretation of the return value
+        (void)ret;
+    }
+};
 
 int main(int /*argc*/, char const* const* /*argv*/)
 {
@@ -68,16 +125,15 @@ int main(int /*argc*/, char const* const* /*argv*/)
         });
     }
 
+    auto externalConsumer = ExternalConsumer{};
     auto consumers = std::vector<std::jthread>{};
     // spawns a few worker threads that consume the data
     for (size_t i{0}; i < consumerThreadsCt; ++i) {
         consumers.emplace_back([&]() {
             auto next = queue.dequeue();
             while (next) {
-                // !TODO what should be done with the full cart?
-                // write *next to file
-                // call system("stellar.....");
                 auto const& [bin_id, values] = *next;
+                externalConsumer.processBasket(bin_id, values);
                 for ([[maybe_unused]] auto const& v : values) {
                     ++countConsumed;
                 }
