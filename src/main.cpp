@@ -1,4 +1,5 @@
 #include "cart_queue.hpp"
+#include "external_process.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -54,10 +55,10 @@ public:
         ofs.close();
 
         // Call consumer program
-        auto call = executableName + " " + pathName.string();
-        auto ret = std::system(call.c_str());
-        //!TODO missing interpretation of the return value
-        (void)ret;
+        auto process = external_process{{executableName, pathName.string()}};
+        if (process.status() != 0) {
+            throw std::runtime_error("child process " + executableName + " terminated with an error");
+        }
     }
 };
 
